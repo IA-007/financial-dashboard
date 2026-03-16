@@ -49,3 +49,45 @@ def get_company_info(ticker_symbol: str) -> dict:
          return ticker.info
     except Exception:
          return {}
+
+def prepare_seasonality_data(df: pd.DataFrame, years: int = 5) -> pd.DataFrame:
+    """
+    Prepares data for Year-over-Year seasonality plotting.
+    Filters the last `years` of data, extracts the year, and maps all dates
+    to a single leap year (e.g., 2024) to align the X-axis by month and day.
+    """
+    if df.empty or 'Date' not in df.columns:
+        return pd.DataFrame()
+        
+    # Ensure Date is datetime type
+    df = df.copy()
+    if not pd.api.types.is_datetime64_any_dtype(df['Date']):
+        df['Date'] = pd.to_datetime(df['Date'])
+        
+    last_date = df['Date'].max()
+    start_date = last_date - pd.DateOffset(years=years)
+    
+    # Filter for the last N years
+    df_filtered = df[df['Date'] >= start_date].copy()
+    
+    if df_filtered.empty:
+        return df_filtered
+        
+    # Extract the Year as a column for the legend
+    df_filtered['Year'] = df_filtered['Date'].dt.year
+    
+    # Create a Fake_Date mapped to year 2024 (a leap year) to align X axis
+    def map_to_2024(d):
+        try:
+             # Try mapping to 2024
+             return d.replace(year=2024)
+        except ValueError:
+             # Handle Feb 29 for non-leap years - though replacing TO a leap year 
+             # from a non-leap year shouldn't raise ValueError. 
+             # It might if replacing FROM a leap year to a NON-leap year.
+             pass
+        return d
+        
+    df_filtered['Fake_Date'] = df_filtered['Date'].apply(map_to_2024)
+    
+    return df_filtered

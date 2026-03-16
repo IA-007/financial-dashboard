@@ -1,7 +1,7 @@
 import streamlit as st
 import datetime
 import plotly.graph_objects as go
-from data_handler import get_historical_data, get_company_info, ASSET_CLASSES
+from data_handler import get_historical_data, get_company_info, prepare_seasonality_data, ASSET_CLASSES
 from ml_forecaster import add_technical_indicators, generate_prophet_forecast
 
 # Setup UI page config FIRST
@@ -24,9 +24,10 @@ period_choice = st.sidebar.radio(
 )
 
 # 3. Technical Indicators Toggles
-st.sidebar.subheader("Technical Indicators")
+st.sidebar.subheader("Technical Indicators & Views")
 show_sma = st.sidebar.checkbox("Show SMA (20/50)", value=True)
 show_rsi = st.sidebar.checkbox("Show RSI (14)", value=False)
+show_seasonality = st.sidebar.checkbox("Show Seasonality (5 Yr)", value=False)
 
 # 4. Machine Learning Forecast Toggles
 st.sidebar.subheader("AI Prediction (Prophet)")
@@ -152,6 +153,57 @@ else:
         
         fig_rsi.update_layout(height=300, template="plotly_dark", margin=dict(l=0, r=0, t=30, b=0))
         st.plotly_chart(fig_rsi, use_container_width=True)
+
+    # --- SEASONALITY (YoY) CHART ---
+    if show_seasonality:
+        st.subheader("🗓️ 5-Year Seasonality (Year-over-Year)")
+        with st.spinner("Preparing seasonality data..."):
+             # Fast path: If the user chose 5y, 10y, or max, we already have enough data in df_main
+             if period_choice in ["5y", "10y", "max"]:
+                  df_season = prepare_seasonality_data(df_main, years=5)
+             else:
+                  # Need to load 5 years of data specifically for this view
+                  df_5y = load_data(asset_choice, "5y")
+                  df_season = prepare_seasonality_data(df_5y, years=5)
+             
+             if not df_season.empty:
+                  fig_season = go.Figure()
+                  
+                  # Plot a line for each year
+                  years_present = df_season['Year'].unique()
+                  
+                  # Define a color palette for up to 6 years
+                  colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+                  
+                  for i, yr in enumerate(sorted(years_present)):
+                       df_year = df_season[df_season['Year'] == yr]
+                       # Thicker line for the current/latest year to make it stand out
+                       line_width = 3 if yr == max(years_present) else 1.5
+                       c = colors[i % len(colors)]
+                       
+                       fig_season.add_trace(go.Scatter(
+                           x=df_year['Fake_Date'],
+                           y=df_year['Close'],
+                           mode='lines',
+                           line=dict(width=line_width, color=c),
+                           name=str(yr)
+                       ))
+                       
+                  fig_season.update_layout(
+                      template="plotly_dark",
+                      height=500,
+                      margin=dict(l=0, r=0, t=40, b=0),
+                      xaxis=dict(
+                          title="Month",
+                          tickformat="%b" # Shows Jan, Feb, Mar, etc.
+                      ),
+                      yaxis_title="Price",
+                      hovermode='x unified'
+                  )
+                  
+                  st.plotly_chart(fig_season, use_container_width=True)
+             else:
+                  st.warning("Not enough data to compute 5-year seasonality.")
 
     # Raw Data Expander
     with st.expander("View Raw Historical Data (tail)"):
