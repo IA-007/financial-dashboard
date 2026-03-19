@@ -25,8 +25,12 @@ period_choice = st.sidebar.radio(
 
 # 3. Technical Indicators Toggles
 st.sidebar.subheader("Technical Indicators & Views")
+layout_theme = st.sidebar.radio("Layout Theme", ["Classic", "Modern"], index=1, horizontal=True)
 show_sma = st.sidebar.checkbox("Show SMA (20/50)", value=True)
 show_rsi = st.sidebar.checkbox("Show RSI (14)", value=False)
+show_macd = st.sidebar.checkbox("Show MACD", value=False)
+show_momentum = st.sidebar.checkbox("Show Momentum (10d)", value=False)
+show_bbands = st.sidebar.checkbox("Show Bollinger Bands", value=False)
 show_seasonality = st.sidebar.checkbox("Show Seasonality (5 Yr)", value=False)
 
 # 4. Machine Learning Forecast Toggles
@@ -93,6 +97,10 @@ else:
         fig.add_trace(go.Scatter(x=df_main['Date'], y=df_main['SMA_20'], mode='lines', line=dict(color='orange', width=1.5), name='SMA 20'))
         fig.add_trace(go.Scatter(x=df_main['Date'], y=df_main['SMA_50'], mode='lines', line=dict(color='blue', width=1.5), name='SMA 50'))
 
+    if show_bbands and 'BB_Upper' in df_main.columns:
+        fig.add_trace(go.Scatter(x=df_main['Date'], y=df_main['BB_Upper'], line=dict(color='rgba(250,250,250,0.5)', dash='dash'), name='BB Upper'))
+        fig.add_trace(go.Scatter(x=df_main['Date'], y=df_main['BB_Lower'], line=dict(color='rgba(250,250,250,0.5)', dash='dash'), fill='tonexty', fillcolor='rgba(250,250,250,0.1)', name='BB Lower'))
+
     # Add AI Prophet Forecast if enabled
     if enable_ml and len(df_main) > 50:
         with st.spinner(f"Running Meta Prophet ML Model for {forecast_horizon} days forecast..."):
@@ -142,17 +150,41 @@ else:
     
     st.plotly_chart(fig, use_container_width=True)
     
-    # --- SEPARATE CHART FOR RSI ---
+    # --- ADDITIONAL INDICATOR CHARTS ---
+    active_sub_charts = []
+
     if show_rsi and 'RSI_14' in df_main.columns:
-        st.subheader("RSI (14 Days)")
         fig_rsi = go.Figure()
         fig_rsi.add_trace(go.Scatter(x=df_main['Date'], y=df_main['RSI_14'], line=dict(color='cyan'), name='RSI'))
-        # Overbought / Oversold lines
         fig_rsi.add_hline(y=70, line_dash="dash", line_color="red", annotation_text="Overbought > 70")
         fig_rsi.add_hline(y=30, line_dash="dash", line_color="green", annotation_text="Oversold < 30")
-        
-        fig_rsi.update_layout(height=300, template="plotly_dark", margin=dict(l=0, r=0, t=30, b=0))
-        st.plotly_chart(fig_rsi, use_container_width=True)
+        fig_rsi.update_layout(title="RSI (14 Days)", height=250, template="plotly_dark", margin=dict(l=0, r=0, t=30, b=0))
+        active_sub_charts.append(fig_rsi)
+
+    if show_macd and 'MACD' in df_main.columns:
+        fig_macd = go.Figure()
+        fig_macd.add_trace(go.Bar(x=df_main['Date'], y=df_main['MACD'] - df_main['MACD_Signal'], name='Histogram', marker_color='gray'))
+        fig_macd.add_trace(go.Scatter(x=df_main['Date'], y=df_main['MACD'], line=dict(color='yellow'), name='MACD'))
+        fig_macd.add_trace(go.Scatter(x=df_main['Date'], y=df_main['MACD_Signal'], line=dict(color='orange'), name='Signal'))
+        fig_macd.update_layout(title="MACD (12, 26, 9)", height=250, template="plotly_dark", margin=dict(l=0, r=0, t=30, b=0))
+        active_sub_charts.append(fig_macd)
+
+    if show_momentum and 'Momentum' in df_main.columns:
+        fig_mom = go.Figure()
+        fig_mom.add_trace(go.Scatter(x=df_main['Date'], y=df_main['Momentum'], line=dict(color='magenta'), name='Momentum'))
+        fig_mom.add_hline(y=0, line_dash="dash", line_color="white")
+        fig_mom.update_layout(title="Momentum (10 Days)", height=250, template="plotly_dark", margin=dict(l=0, r=0, t=30, b=0))
+        active_sub_charts.append(fig_mom)
+
+    if layout_theme == "Modern" and active_sub_charts:
+        # Display side-by-side using columns
+        cols = st.columns(len(active_sub_charts))
+        for i, chart in enumerate(active_sub_charts):
+            cols[i].plotly_chart(chart, use_container_width=True)
+    elif layout_theme == "Classic" and active_sub_charts:
+        # Display stacked
+        for chart in active_sub_charts:
+            st.plotly_chart(chart, use_container_width=True)
 
     # --- SEASONALITY (YoY) CHART ---
     if show_seasonality:
@@ -188,6 +220,32 @@ else:
                            line=dict(width=line_width, color=c),
                            name=str(yr)
                        ))
+                       
+                  # --- Seasonality ML Projection for Current Year ---
+                  current_year = datetime.datetime.now().year
+                  if enable_ml and current_year in years_present and len(df_main) > 50:
+                       # We project from today to Dec 31st of the current year
+                       days_to_end_of_year = (datetime.datetime(current_year, 12, 31) - datetime.datetime.now()).days
+                       if days_to_end_of_year > 0:
+                           season_forecast = generate_prophet_forecast(df_main, days_to_end_of_year)
+                           if not season_forecast.empty:
+                               last_hist_date = df_main['Date'].iloc[-1]
+                               future_season = season_forecast[season_forecast['ds'] > last_hist_date].copy()
+                               
+                               def map_to_2024(d):
+                                   try:
+                                        return d.replace(year=2024)
+                                   except ValueError:
+                                        return d
+                               future_season['Fake_Date'] = future_season['ds'].apply(map_to_2024)
+                               
+                               fig_season.add_trace(go.Scatter(
+                                   x=future_season['Fake_Date'],
+                                   y=future_season['yhat'],
+                                   mode='lines',
+                                   line=dict(width=3, color='fuchsia', dash='dot'),
+                                   name=f'{current_year} Forecast'
+                               ))
                        
                   fig_season.update_layout(
                       template="plotly_dark",

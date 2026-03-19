@@ -6,6 +6,7 @@ import datetime
 ASSET_CLASSES = {
     "US Stocks": ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META"],
     "EU Stocks": ["SIE.DE", "MC.PA", "ASML.AS", "SAP.DE", "ENI.MI", "ISP.MI", "UCG.MI"],
+    "EU Futures & Indices": ["STXE=F", "FDXS=F", "^STOXX50E", "^GDAXI", "FTSEMIB.MI"],
     "Cryptocurrencies": ["BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD"],
     "Futures": ["ES=F", "NQ=F", "GC=F", "CL=F", "SI=F"] # S&P500, Nasdaq, Gold, Crude Oil, Silver
 }

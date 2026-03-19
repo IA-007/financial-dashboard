@@ -26,6 +26,21 @@ def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     rs = gain / loss.replace(0, np.nan)
     df_calc['RSI_14'] = 100 - (100 / (1 + rs))
 
+    # MACD (12, 26, 9)
+    ema_12 = df_calc['Close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df_calc['Close'].ewm(span=26, adjust=False).mean()
+    df_calc['MACD'] = ema_12 - ema_26
+    df_calc['MACD_Signal'] = df_calc['MACD'].ewm(span=9, adjust=False).mean()
+
+    # Momentum (10 days)
+    df_calc['Momentum'] = df_calc['Close'].diff(periods=10)
+
+    # Bollinger Bands
+    df_calc['BB_Middle'] = df_calc['Close'].rolling(window=20).mean()
+    std_20 = df_calc['Close'].rolling(window=20).std()
+    df_calc['BB_Upper'] = df_calc['BB_Middle'] + (std_20 * 2)
+    df_calc['BB_Lower'] = df_calc['BB_Middle'] - (std_20 * 2)
+
     return df_calc
 
 def generate_prophet_forecast(df: pd.DataFrame, days_to_forecast: int = 30) -> pd.DataFrame:
@@ -55,7 +70,7 @@ def generate_prophet_forecast(df: pd.DataFrame, days_to_forecast: int = 30) -> p
         # Initialize and fit model
         # daily_seasonality=True is useful for crypto. For stocks, it might be less relevant 
         # but Prophet handles it well automatically based on data density.
-        model = Prophet(daily_seasonality=False, yearly_seasonality=True, weekly_seasonality=True)
+        model = Prophet(daily_seasonality=False, yearly_seasonality=True, weekly_seasonality=False)
         model.fit(df_prophet)
 
         # Create future dataframe for forecasting
