@@ -1,5 +1,6 @@
 import streamlit as st
 import datetime
+import math
 import plotly.graph_objects as go
 from data_handler import get_historical_data, get_company_info, prepare_seasonality_data, ASSET_CLASSES
 from ml_forecaster import add_technical_indicators, generate_prophet_forecast
@@ -38,8 +39,10 @@ st.sidebar.subheader("AI Prediction (Prophet)")
 enable_ml = st.sidebar.checkbox("Enable ML Forecast", value=False)
 if enable_ml:
     forecast_horizon = st.sidebar.slider("Forecast Horizon (Days)", min_value=7, max_value=180, value=30, step=7)
+    show_ml_metrics = st.sidebar.checkbox("Show ML Risk/Reward Gauges", value=True)
 else:
     forecast_horizon = 0
+    show_ml_metrics = False
 
 # ---------- MAIN DASHBOARD ----------
 st.title(f"📈 Dashboard Previsionale: {asset_choice}")
@@ -111,12 +114,19 @@ else:
                   # Ensure timezone alignment for plotting (yfinance gives tz-naive now, prophet gives tz-naive)
                   # The future predicted dates are everything strictly after our last historical date
                   last_hist_date = df_main['Date'].iloc[-1]
+                  last_hist_price = df_main['Close'].iloc[-1]
                   future_only = df_forecast_result[df_forecast_result['ds'] > last_hist_date]
+                  
+                  # Anchor lists to plot to avoid the visual "jump" gap
+                  plot_dates = [last_hist_date] + future_only['ds'].tolist()
+                  plot_yhat = [last_hist_price] + future_only['yhat'].tolist()
+                  plot_upper = [last_hist_price] + future_only['yhat_upper'].tolist()
+                  plot_lower = [last_hist_price] + future_only['yhat_lower'].tolist()
                   
                   # Plot Predicted Mean Line
                   fig.add_trace(go.Scatter(
-                      x=future_only['ds'], 
-                      y=future_only['yhat'], 
+                      x=plot_dates, 
+                      y=plot_yhat, 
                       mode='lines', 
                       line=dict(color='fuchsia', width=2, dash='dot'),
                       name=f'Prophet ML Forecast ({forecast_horizon}d)'
@@ -124,8 +134,8 @@ else:
                   
                   # Plot Confidence Interval (Upper & Lower Bounds) as a shaded area
                   fig.add_trace(go.Scatter(
-                      x=future_only['ds'].tolist() + future_only['ds'].tolist()[::-1],
-                      y=future_only['yhat_upper'].tolist() + future_only['yhat_lower'].tolist()[::-1],
+                      x=plot_dates + plot_dates[::-1],
+                      y=plot_upper + plot_lower[::-1],
                       fill='toself',
                       fillcolor='rgba(255, 0, 255, 0.1)',
                       line=dict(color='rgba(255, 255, 255, 0)'),
@@ -134,6 +144,65 @@ else:
                   ))
                   
                   st.success("🤖 ML Forecast generated successfully!")
+                  
+                  if show_ml_metrics:
+                      # Probability of Rise Calculation
+                      final_yhat = future_only['yhat'].iloc[-1]
+                      final_lower = future_only['yhat_lower'].iloc[-1]
+                      final_upper = future_only['yhat_upper'].iloc[-1]
+                      sigma = (final_upper - final_lower) / 3.92
+                      
+                      if sigma > 0:
+                          z_score = (last_hist_price - final_yhat) / (sigma * math.sqrt(2))
+                          prob_up = (1.0 - (0.5 * (1 + math.erf(z_score)))) * 100
+                      else:
+                          prob_up = 100 if final_yhat > last_hist_price else 0
+                          
+                      # Max Drawdown Calculation
+                      min_predicted_price = future_only['yhat_lower'].min()
+                      if min_predicted_price < last_hist_price:
+                          max_dd_pct = ((last_hist_price - min_predicted_price) / last_hist_price) * 100
+                      else:
+                          max_dd_pct = 0
+                          
+                      st.subheader(f"📊 ML Risk/Reward Metrics ({forecast_horizon} Days)")
+                      g1, g2 = st.columns(2)
+                      
+                      fig_gauge_prob = go.Figure(go.Indicator(
+                          mode = "gauge+number",
+                          value = prob_up,
+                          number = {'suffix': "%", 'valueformat': ".1f"},
+                          title = {'text': "Probabilità di Rialzo", 'font': {'size': 18}},
+                          gauge = {
+                              'axis': {'range': [0, 100]},
+                              'bar': {'color': "lightgreen" if prob_up >= 50 else "salmon"},
+                              'steps': [
+                                  {'range': [0, 40], 'color': "rgba(255, 0, 0, 0.2)"},
+                                  {'range': [40, 60], 'color': "rgba(255, 255, 0, 0.2)"},
+                                  {'range': [60, 100], 'color': "rgba(0, 255, 0, 0.2)"}],
+                          }
+                      ))
+                      fig_gauge_prob.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor="rgba(0,0,0,0)", font={'color': "white"})
+                      
+                      fig_gauge_dd = go.Figure(go.Indicator(
+                          mode = "gauge+number",
+                          value = max_dd_pct,
+                          number = {'suffix': "%", 'valueformat': ".1f"},
+                          title = {'text': "Max Drawdown Previsto", 'font': {'size': 18}},
+                          gauge = {
+                              'axis': {'range': [0, max(30, max_dd_pct + 10)]},
+                              'bar': {'color': "red"},
+                              'steps': [
+                                  {'range': [0, 10], 'color': "rgba(0, 255, 0, 0.2)"},
+                                  {'range': [10, 20], 'color': "rgba(255, 255, 0, 0.2)"},
+                                  {'range': [20, 100], 'color': "rgba(255, 0, 0, 0.2)"}],
+                          }
+                      ))
+                      fig_gauge_dd.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=20), paper_bgcolor="rgba(0,0,0,0)", font={'color': "white"})
+                      
+                      g1.plotly_chart(fig_gauge_prob, use_container_width=True)
+                      g2.plotly_chart(fig_gauge_dd, use_container_width=True)
+
              else:
                   st.warning("Forecasting failed due to insufficient valid data points.")
                   
