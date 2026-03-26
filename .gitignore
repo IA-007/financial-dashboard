@@ -1,0 +1,10 @@
+# Python Environments
+venv/
+venvcd/
+.venv/
+env/
+__pycache__/
+*.pyc
+
+# Streamlit secrets (these will be configured directly in Streamlit Cloud)
+.streamlit/secrets.toml

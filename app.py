@@ -8,6 +8,34 @@ from ml_forecaster import add_technical_indicators, generate_prophet_forecast
 # Setup UI page config FIRST
 st.set_page_config(page_title="AI Market Forecaster", layout="wide", page_icon="📈")
 
+import streamlit_authenticator as stauth
+
+# --- AUTHENTICATION ---
+# Convert st.secrets to standard Python dictionaries
+credentials = {"usernames": dict(st.secrets["credentials"]["usernames"])}
+
+authenticator = stauth.Authenticate(
+    credentials,
+    st.secrets["cookie"]["name"],
+    st.secrets["cookie"]["key"],
+    st.secrets["cookie"]["expiry_days"],
+    st.secrets.get("preauthorized", {"emails": []})
+)
+
+authenticator.login()
+
+if st.session_state.get("authentication_status") is False:
+    st.error('Username/password is incorrect')
+    st.stop()
+elif st.session_state.get("authentication_status") is None:
+    st.warning('Please enter your username and password')
+    st.stop()
+
+# --- AUTHENTICATED AREA ---
+authenticator.logout('Logout', 'sidebar')
+st.sidebar.write(f"Welcome, *{st.session_state.get('name', 'Admin')}*!")
+st.sidebar.markdown("---")
+
 # ---------- SIDEBAR FILTERS ----------
 st.sidebar.title("🛠️ Configuration")
 
