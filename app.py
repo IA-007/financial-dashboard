@@ -28,11 +28,6 @@ authenticator = stauth.Authenticate(
     cookie["expiry_days"],
     st.secrets.get("preauthorized", {"emails": []})
 )
-    st.secrets["cookie"]["name"],
-    st.secrets["cookie"]["key"],
-    st.secrets["cookie"]["expiry_days"],
-    st.secrets.get("preauthorized", {"emails": []})
-)
 
 authenticator.login()
 
