@@ -20,3 +20,9 @@ Ricorda la regola d'oro su come il modello reagisce cambiando l'orizzonte storic
 
 ---
 _Questi appunti ti permetteranno di riprendere il lavoro immediatamente non appena deciderai di sviluppare la V1.4!_
+
+## 4. Stato dei Lavori Attuale (Punto di Ripristino per Domani)
+Abbiamo completato il setup del codice per l'app e il push su GitHub per il Cloud. Ci siamo fermati su un problema ostico di `streamlit-authenticator`: la dashboard rifiuta le credenziali `admin` / `admin123` nonostante il file `secrets.toml` e la configurazione sembrino corretti.
+**Prossimi passi per ripartire:**
+1. Ricalcolare l'hash della password usando lo script ufficiale aggiornato della libreria.
+2. Controllare se `streamlit-authenticator` rifiuta il login per via del blocco "preauthorized" o per una mancata decodifica dei cookie, testando la dashboard rigorosamente *in locale* prima di ricaricare sul web.
