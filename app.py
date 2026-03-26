@@ -11,11 +11,23 @@ st.set_page_config(page_title="AI Market Forecaster", layout="wide", page_icon="
 import streamlit_authenticator as stauth
 
 # --- AUTHENTICATION ---
-# Convert st.secrets to standard Python dictionaries
-credentials = {"usernames": dict(st.secrets["credentials"]["usernames"])}
+# Convert st.secrets to standard Python dictionaries using the official to_dict() method
+credentials = dict(st.secrets["credentials"])
+# For Streamlit Authenticator to work, we must ensure pure dictionaries are passed
+if hasattr(st.secrets["credentials"], 'to_dict'):
+    credentials = st.secrets["credentials"].to_dict()
+    
+cookie = st.secrets["cookie"]
+if hasattr(cookie, 'to_dict'):
+    cookie = cookie.to_dict()
 
 authenticator = stauth.Authenticate(
     credentials,
+    cookie["name"],
+    cookie["key"],
+    cookie["expiry_days"],
+    st.secrets.get("preauthorized", {"emails": []})
+)
     st.secrets["cookie"]["name"],
     st.secrets["cookie"]["key"],
     st.secrets["cookie"]["expiry_days"],
